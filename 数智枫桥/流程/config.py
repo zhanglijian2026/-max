@@ -292,7 +292,7 @@ beta=0.4
 gamma=0
 delta_R=0.1
 
-counts=20
+counts=100
 
 
 

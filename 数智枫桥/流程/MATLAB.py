@@ -14,6 +14,10 @@ perceptual_noise=True
 initial_noise=True
 noise=True
 data=[]
+T=[]
+X_1,X_2,X_3=[],[],[]
+Y_1,Y_2,E_t=[],[],[]
+
 
 #读取数据
 @decorators.validate_and_catch(func_name="读取haNLP数据")
@@ -44,8 +48,8 @@ def truncated_normal_noise(i,_seed):
     noise_list = []
     mu = 0
     sigma = 1
-    bound_low = -0.10
-    bound_high = 0.10
+    bound_low = -0.50
+    bound_high = 0.50
 
     #np.random.seed(seed)
     for _ in range(i):
@@ -61,7 +65,7 @@ def truncated_normal_noise(i,_seed):
 # 将C/R/L参数传入微分函数
 @decorators.validate_and_catch(func_name="演化博弈模块动态微分方程")
 def replicator_ode(t, z, c1, r1, l1, c2, r2, l2,c3, _r3, l3)->list:
-    _x1,_x2,_x3, _y = z
+    _x1,_x2,_x3, _y1,_y2 = z
 
     #以_t为种子，设置随机噪音
     seed = int(t * 1000) % 2 ** 32
@@ -77,27 +81,28 @@ def replicator_ode(t, z, c1, r1, l1, c2, r2, l2,c3, _r3, l3)->list:
     v_neg = _x1 * l1/config.loss_coefficient + _x2* l2/config.loss_coefficient + _x3 * l3/config.loss_coefficient                            # 消极维权收益
 
 
-    if  perceptual_noise==True and noise==True:
-        v_avg = _y * v_pos + (1 - _y) * v_neg # 退役军人平均收益
+    if  perceptual_noise==False or noise==False:
+        v_avg = _y1 * v_pos +  _y2 * v_neg # 退役军人平均收益
         u_avg = _x1 * u_rigid+ _x2 * u_offline + _x3 * u_digital   # 基层平均收益（政府群体）
 
         dx1_dt = _x1 * (u_rigid - u_avg)
         dx2_dt = _x2 * (u_offline - u_avg)
         dx3_dt = _x3 * (u_digital - u_avg)
-        dy_dt = _y * (v_pos - v_avg) * (1 - _y)
+        dy_dt = _y1 * (v_pos - v_avg) * _y2
         return [dx1_dt, dx2_dt, dx3_dt, dy_dt]
     x_x1, x_x2, x_x3 ,y_y1,y_y2=truncated_normal_noise(5,seed)
     pnp_u_rigid=u_rigid*(1+x_x1);pnp_u_offline=u_offline*(1+x_x2);pnp_u_digital=u_digital*(1+x_x3);pnp_v_pos=v_pos*(1+y_y1);pnp_v_neg=v_neg*(1+y_y2)
 
-    v_avg = _y*pnp_v_pos + (1-_y)*pnp_v_neg
+    v_avg = _y1*pnp_v_pos + _y2*pnp_v_neg
     u_avg = _x1 * pnp_u_rigid + _x2 * pnp_u_offline + _x3 * pnp_u_digital
     # 3. 标准复制动态方程
     # 如果某策略收益高于平均，其占比会增加
     dx1_dt = _x1  * (pnp_u_rigid - u_avg)
     dx2_dt = _x2 * (pnp_u_offline - u_avg)
     dx3_dt = _x3 * (pnp_u_digital - u_avg)
-    dy_dt = _y * (pnp_v_pos - v_avg)*(1-_y)
-    return [dx1_dt, dx2_dt, dx3_dt,dy_dt]
+    dy1_dt = _y1 * (pnp_v_pos - v_avg)
+    dy2_dt = (1-_y1) * (pnp_v_neg - v_avg)
+    return [dx1_dt, dx2_dt, dx3_dt,dy1_dt,dy2_dt]
 
 #计算主逻辑
 @decorators.validate_and_catch(func_name="演化博弈模块的计算主逻辑")
@@ -122,7 +127,7 @@ def calculator(c1, r1, l1, j1,c2, r2, l2, j2, c3, r3, l3,j3):
     sol = solve_ivp(
         lambda _t, z: replicator_ode(_t, z, *args),             #
         config.ts_pan,                                          # 时间范围 [0, 100]
-        [pnp_x1,pnp_x2,pnp_x3,(pnp_x1*j1+pnp_x2*j2+pnp_x3*j3)],                              # 初始值
+        [pnp_x1,pnp_x2,pnp_x3,(pnp_x1*j1+pnp_x2*j2+pnp_x3*j3),1-(pnp_x1*j1+pnp_x2*j2+pnp_x3*j3)],                              # 初始值
         method='RK45',                                          # 等价于 MATLAB 的 ode45（默认就是 RK45），也是python里的scipy的一个算法
         rtol=1e-6,                                              # 等价于 'RelTol',1e-6，相对误差容限（精度控制）
         t_eval=np.linspace(0, 100, 1000)        # 输出采样点
@@ -143,7 +148,9 @@ def calculator(c1, r1, l1, j1,c2, r2, l2, j2, c3, r3, l3,j3):
     x1_t = np.clip(sol.y[0],0,1.0)# S(t):
     x2_t = np.clip(sol.y[1],0,1.0)
     x3_t = np.clip(sol.y[2],0,1.0)
-    y_t  = np.clip(sol.y[3],0,1.0) # #P(t)：#群众矛盾激化概率时序
+    y1_t  = np.clip(sol.y[3],0,1.0) # #P(t)：#群众矛盾激化概率时序
+    y2_t = np.clip(sol.y[4],0,1.0)
+
     # E(t)：系统均衡偏离度（稳态最优x=0.86）
     # E(t)：策略收益不均衡度（后处理计算，不作为ODE状态变量）
     u_rigid_arr = r1 - c1 - l1 / config.loss_coefficient
@@ -154,21 +161,29 @@ def calculator(c1, r1, l1, j1,c2, r2, l2, j2, c3, r3, l3,j3):
            x2_t * np.abs(u_offline_arr - u_avg_arr) +
            x3_t * np.abs(u_digital_arr - u_avg_arr))
 
-    return t, x1_t,x2_t,x3_t, y_t,e_t
-
+    return t, x1_t,x2_t,x3_t, y1_t,y2_t,e_t
+#噪音后数据分流
 def mc_traj(all_data):
     for i in all_data:
-        t,x1_t,x2_t,x3_t,y_t,e_t = i
-        print(x1_t,x2_t,x3_t,y_t,e_t)
+        if not i:continue
+        t,x1_t,x2_t,x3_t,y1_t,y2_t,e_t = i
+        T.append(t)
+        X_1.append(x1_t)
+        X_2.append(x2_t)
+        X_3.append(x3_t)
+        Y_1.append(y1_t)
+        Y_2.append(y2_t)
+        E_t.append(e_t)
 
-
-
-
-
-
-
-
-
+#均值曲线
+def mean_data():
+    arg=[T,X_1,X_2,X_3,Y_1,Y_2,E_t]
+    arg_s=[]
+    for i in arg:
+        df=pd.DataFrame(i)
+        # 计算平均曲线：每一列求平均
+        arg_s.append(df.mean(axis=0))
+    return arg_s
 
 #绘图
 def _plot_sync(t, x1_t,x2_t,x3_t):
@@ -191,11 +206,11 @@ def _plot_sync(t, x1_t,x2_t,x3_t):
         print(e)
         Tool.write_err_log(f"绘图出现了{e}问题")
 
-def _plot_sync2(t,  y_t):
+def _plot_sync2(t,  y1_t,y2_t):
     try:
         plt.figure(figsize=(10, 5))    #创建画布
-        plt.plot(t, y_t, 'b-', linewidth=2, label='退役军人协同诉求表达概率 ')#曲线：退役军人合规反馈概率（蓝色实线）
-        plt.plot(t,1-y_t,"m-",linewidth=2,label='退役军人非协同诉求表达概率')
+        plt.plot(t, y1_t, 'b-', linewidth=2, label='退役军人协同诉求表达概率 ')#曲线：退役军人合规反馈概率（蓝色实线）
+        plt.plot(t,y2_t,"m-",linewidth=2,label='退役军人非协同诉求表达概率')
         plt.xlabel('演化迭代周期 t')#x轴线
         plt.ylabel('策略选择概率')#y轴线
         plt.legend()#对以上曲线显示图例
@@ -209,37 +224,70 @@ def _plot_sync2(t,  y_t):
     except Exception as e:
         print(e)
         Tool.write_err_log(f"的绘图出现了{e}问题")
+
+
+def _plot_sync3(t,_all_data):
+    try:
+        plt.figure(figsize=(10, 5))
+        for i in range(len(_all_data)):
+            data_name=_all_data[i]
+            if i == 0:
+                lab1 = "选择纯刚性服务x1(t)"
+                lab2 = "选择纯线下柔性服务 x2(t)"
+                lab3 = "选择数智融合占比 x3(t)"
+            else:
+                lab1 = lab2 = lab3 = ""
+            plt.plot(t, data_name[1], 'r-', linewidth=2, label=lab1)  # 曲线：基层选择数智融合概率（红色实线）
+            plt.plot(t, data_name[2], 'g-', linewidth=2, label=lab2)
+            plt.plot(t, data_name[3], 'm-', linewidth=2, label=lab3)
+        plt.xlabel('演化迭代周期 t')  # x轴线
+        plt.ylabel('策略选择概率')  # y轴线
+        plt.legend()  # 对以上曲线显示图例
+        plt.title('三策略演化博弈带噪音轨迹')  # 标题
+        plt.grid(True)  # 显示网格线
+        plt.tight_layout()  # 自动调整间距，就是美化，有点神奇
+        plt.savefig('game_evolution3.png', dpi=300, bbox_inches="tight")  # 路径和保存的图片分辨率
+        # 非阻塞显
+        Tool.write_sys_opt_log("演化博弈图绘制完成")
+        plt.show()
+    except Exception as e:
+        print(e)
 #启动独立分进程来显示图片和保存csv
 #异步
-async def plt_numer_yi_bu(t, x1_t,x2_t,x3_t ,y_t,e_t):
+async def plt_numer_yi_bu(t, x1_t,x2_t,x3_t ,y1_t,y2_t,e_t,all_data):
     def show_image_process(_t, _x1_t,_x2_t,_x3_t):
         p = Process(target=_plot_sync, args=(_t, _x1_t, _x2_t,_x3_t))
         p.daemon = False
         p.start()
-    def show_image_process2(_t,_y_t):
-        p = Process(target=_plot_sync2, args=(_t,_y_t))
+    def show_image_process2(_t,_y1_t,_y2_t):
+        p = Process(target=_plot_sync2, args=(_t,_y1_t,_y2_t))
         p.daemon=False
         p.start()
-    def matlab_csv(_t, _x1_t, _x2_t,_x3_t,_y_t,_e_t):
+    def show_image_process3(_t,_all_data):
+        p = Process(target=_plot_sync3,args=(_t,_all_data))
+        p.daemon = False
+        p.start()
+    def matlab_csv(_t, _x1_t, _x2_t,_x3_t,_y1_t,_e_t):
         # 保存为CSV
         pd.DataFrame({"t": _t,
                       "x1_t": _x1_t,
                       "x2_t": _x2_t,
                       "x3_t": _x3_t,
-                      "y_t": _y_t,
+                      "y_t": _y1_t,
                       "E_t": _e_t
                       }).to_csv(config.sd_csv, index=False,encoding='utf-8-sig')
         Tool.write_sys_opt_log("保存为CSV成功")
         print("保存为CSV成功")
     await asyncio.to_thread(show_image_process, t, x1_t,x2_t, x3_t)
-    await asyncio.to_thread(show_image_process2, t, y_t)
-    await asyncio.to_thread(matlab_csv, t, x1_t,x2_t,x3_t, y_t,e_t)
+    await asyncio.to_thread(show_image_process2, t, y1_t,y2_t)
+    await asyncio.to_thread(show_image_process3, t,all_data)
+    await asyncio.to_thread(matlab_csv, t, x1_t,x2_t,x3_t, y1_t,e_t)
 
 # 执行
 def main():
-    if not noise:asyncio.run(plt_numer_yi_bu(*calculator(*init_parameter())));return
+    if not noise:asyncio.run(plt_numer_yi_bu(*calculator(*init_parameter(),data)));return
     for _ in range(config.counts):data.append(calculator(*init_parameter()))
-    if data:mc_traj(data)
+    if data:mc_traj(data);asyncio.run(plt_numer_yi_bu(*mean_data(),data))
     else:raise "数据异常"
 if __name__ == '__main__':
     main()
