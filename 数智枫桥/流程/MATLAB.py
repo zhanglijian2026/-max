@@ -12,7 +12,7 @@ import random
 
 perceptual_noise=True
 initial_noise=True
-noise=True
+noise=False
 data=[]
 T=[]
 X_1,X_2,X_3=[],[],[]
@@ -88,8 +88,9 @@ def replicator_ode(t, z, c1, r1, l1, c2, r2, l2,c3, _r3, l3)->list:
         dx1_dt = _x1 * (u_rigid - u_avg)
         dx2_dt = _x2 * (u_offline - u_avg)
         dx3_dt = _x3 * (u_digital - u_avg)
-        dy_dt = _y1 * (v_pos - v_avg) * _y2
-        return [dx1_dt, dx2_dt, dx3_dt, dy_dt]
+        dy1_dt = _y1 * (v_pos - v_avg)
+        dy2_dt = _y2 * (v_neg - v_avg)
+        return [dx1_dt, dx2_dt, dx3_dt, dy1_dt,dy2_dt]
     x_x1, x_x2, x_x3 ,y_y1,y_y2=truncated_normal_noise(5,seed)
     pnp_u_rigid=u_rigid*(1+x_x1);pnp_u_offline=u_offline*(1+x_x2);pnp_u_digital=u_digital*(1+x_x3);pnp_v_pos=v_pos*(1+y_y1);pnp_v_neg=v_neg*(1+y_y2)
 
@@ -285,9 +286,9 @@ async def plt_numer_yi_bu(t, x1_t,x2_t,x3_t ,y1_t,y2_t,e_t,all_data):
 
 # 执行
 def main():
-    if not noise:asyncio.run(plt_numer_yi_bu(*calculator(*init_parameter(),data)));return
+    if not noise:asyncio.run(plt_numer_yi_bu(*calculator(*init_parameter()),data));return
     for _ in range(config.counts):data.append(calculator(*init_parameter()))
     if data:mc_traj(data);asyncio.run(plt_numer_yi_bu(*mean_data(),data))
-    else:raise "数据异常"
+    else:raise Exception("数据异常")
 if __name__ == '__main__':
     main()
