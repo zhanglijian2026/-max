@@ -5,7 +5,10 @@ import warnings
 from log import Tool
 import shutil
 import decorators
+import streamlit as st
+
 # 检索配置文件
+CK_CONFIG_PATH=os.path.join(os.path.dirname(__file__), "ck_config.json")
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
 CUN_DANG = os.path.join(os.path.dirname(__file__), "存档.json")
 
@@ -108,9 +111,9 @@ DEFAULT_CONFIGS={
     "导入的excel名称(在同一文件夹中)":"nvivo_coding_output2(1).xlsx",
     "导出的excel名字":"dd.xlsx",
     "校准模式(tok/fine(细校准)或tok/coarse(粗校准)":"tok/fine",
-    "成本类权重":10,
-    "收益类权重":5,
-    "损耗类权重":2,
+    "成本类权重":3,
+    "收益类权重":2,
+    "损耗类权重":1,
     "精细度(必须大于0)":3,
     "微分方程组初始值":{
         "政府初始选择刚性管控策略的概率":0.2,
@@ -124,37 +127,57 @@ DEFAULT_CONFIGS={
     "双主体演化博弈策略演化轨迹图":"game_evolution.png",
     "提取博弈输出时序变量CSV":"game_output_timeseries.csv",
     "存量":100,
-    "sd_仿真月数":24
+    "sd_仿真月数":24,
+    "CPU":8
 }
 
 results=[]
 
 #读取配置
-def load_config() -> dict:
-    if not os.path.exists(CONFIG_PATH):
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(DEFAULT_CONFIGS, f, ensure_ascii=False, indent=4)
-        return DEFAULT_CONFIGS.copy()
-    try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            user_config = json.load(f)
-        return _merge(user_config, DEFAULT_CONFIGS)
-    except (json.JSONDecodeError, FileNotFoundError, OSError):
-        print("配置文件损坏或读取失败，已重新加载上一次配置")
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(DEFAULT_CONFIGS, f, ensure_ascii=False, indent=4)
-        return DEFAULT_CONFIGS.copy()
+class ConfigData:
+    _instance = None
+    _initialized=False
+    config={}
+    def __new__(cls):
+        if  cls._instance is None:
+            cls._instance = super(ConfigData, cls).__new__(cls)
+        return cls._instance
+    def __init__(self):
+        if ConfigData._initialized :
+            return
+        ConfigData.config=self.load_config(CONFIG_PATH)
+        ConfigData._initialized=True
+
+    @staticmethod
+    @st.cache_resource
+    def load_config(data) -> dict:
+        if not os.path.exists(data):
+            with open(data, "w", encoding="utf-8") as f:
+                json.dump(DEFAULT_CONFIGS, f, ensure_ascii=False, indent=4)
+            return DEFAULT_CONFIGS.copy()
+        try:
+            with open(data, "r", encoding="utf-8") as f:
+                user_config = json.load(f)
+            print("加载")
+            return ConfigData.merge(user_config, DEFAULT_CONFIGS)
+        except (json.JSONDecodeError, FileNotFoundError, OSError):
+            print("配置文件损坏或读取失败，已重新加载上一次配置")
+            with open(data, "w", encoding="utf-8") as f:
+                json.dump(DEFAULT_CONFIGS, f, ensure_ascii=False, indent=4)
+            return DEFAULT_CONFIGS.copy()
+
 #递归和并
-def _merge(default: dict, user: dict) -> dict:
-    """递归合并配置"""
-    result = default.copy()
-    for k, v in result.items():
-        if k in user and isinstance(user[k], dict) and isinstance(v, dict):
-            user[k] = _merge(v,user[k])
-        else:
-            user[k] = v
-    Tool.write_sys_opt_log("加载配置成功")
-    return user
+    @staticmethod
+    def merge(default: dict, user: dict) -> dict:
+        """递归合并配置"""
+        result = default.copy()
+        for k, v in result.items():
+            if k in user and isinstance(user[k], dict) and isinstance(v, dict):
+                user[k] = ConfigData.merge(v,user[k])
+            else:
+                user[k] = v
+        Tool.write_sys_opt_log("加载配置成功")
+        return user
 
 #存档
 def main():
@@ -221,12 +244,15 @@ def main():
             print(" 请输入正确的数值")
             Tool.write_err_log("你在运行config文件时输入了非数值")
 
+if __name__ =="__main__":
+    main()
 #配置
+
 config_main()
-DEFAULT_CONFIG=load_config()
+obj_config=ConfigData()
+DEFAULT_CONFIG=obj_config.config
 
 #成本类词汇
-load_config()
 cost_high =set(DEFAULT_CONFIG["成本类词汇(数值越高=成本越大)"]["cost_high"])
 cost_mid = set(DEFAULT_CONFIG["成本类词汇(数值越高=成本越大)"]["cost_mid"])
 cost_low =set(DEFAULT_CONFIG["成本类词汇(数值越高=成本越大)"]["cost_low"])
@@ -269,9 +295,6 @@ ts_pan = [DEFAULT_CONFIG["博弈迭代周期"]["初始"], DEFAULT_CONFIG["博弈
 #微分方程组初始值
 init_cond = [DEFAULT_CONFIG["微分方程组初始值"]["政府初始选择刚性管控策略的概率"], DEFAULT_CONFIG["微分方程组初始值"]["政府初始选择纯线下服务策略的概率"],DEFAULT_CONFIG["微分方程组初始值"]["政府初始选择数智融合概率"]]
 
-#Ess
-ESS=0.86
-
 
 """"""
 
@@ -281,27 +304,43 @@ init_stock=DEFAULT_CONFIG["存量"]
 #长期仿真循环时间
 sim_month=DEFAULT_CONFIG["sd_仿真月数"]
 
+#hanlp系统分词的CPU核数
+CPU=DEFAULT_CONFIG["CPU"]
 
-loss_coefficient=10
+#演化博弈系数
+loss_coefficient=DEFAULT_CONFIG["演化博弈系数"]["损耗系数"]
 
+text=True
+text_hanlp=True
 
-
-
-alpha=0.6
-beta=0.4
-gamma=0
-delta_R=0.1
-
-counts=100
-
-
-
-
+#演化博弈公式参数
+alpha=DEFAULT_CONFIG["演化博弈公式参数"]["刚性收益比例"]
+beta=DEFAULT_CONFIG["演化博弈公式参数"]["线下收益比例"]
+gamma=DEFAULT_CONFIG["演化博弈公式参数"]["刚柔融合额外收益"]
+delta_R=DEFAULT_CONFIG["演化博弈公式参数"]["单位比例收益值"]
 
 
-CPU=8
-if __name__ =="__main__":
-    main()
+#相对噪音的随机值
+mu = DEFAULT_CONFIG["噪音程度设置"]["中心值"]
+sigma = DEFAULT_CONFIG["噪音程度设置"]["方差"]
+bound_low =  DEFAULT_CONFIG["噪音程度设置"]["取的最大负面值"]
+bound_high =  DEFAULT_CONFIG["噪音程度设置"]["取的正面最大值"]
+
+#博弈次数
+counts=DEFAULT_CONFIG["噪音博弈次数"]
+
+
+
+
+
+#噪音
+perceptual_noise=True
+initial_noise=True
+noise=False
+
+
+
+
 
 
 

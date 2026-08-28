@@ -6,10 +6,12 @@ from multiprocessing import Pool
 from log import Tool
 import decorators
 import re
+import shutil
 
 #导入数据并数据清洗功能
 @decorators.validate_and_catch(func_name="在hanlp上导入并清洗数据")
 def filter_strategy():
+
         # 导入excel表格
         df = pd.read_excel(config.excel_name)
         print("excel数据读取完成：")
@@ -64,7 +66,7 @@ def segment_with_labels(df,name,text):
     model = hanlp.load(hanlp.pretrained.tok.CTB9_TOK_ELECTRA_SMALL)
 
     texts = df[text].tolist()
-    results = model(texts,coarse=True) # 批量分词
+    results = model(texts,coarse=config.text) # 批量分词
     #results = results[config.key]
     # 组装结果，保留策略名称
     labeled_results = []
@@ -77,7 +79,7 @@ def segment_with_labels(df,name,text):
 
 #核心计算逻辑
 def count_with_labels(batch):
-    batch=ti_cu(batch)
+    if config.text_hanlp:batch=ti_cu(batch)
     batch_results = []
     for word in batch:
         #计算
@@ -118,7 +120,7 @@ def calc_text_score(text:list, high_words, mid_words, low_words)->float:
     # 加权计算原始分数，映射到0~10的区间
     raw_score = high_cnt * config.C + mid_cnt * config.R + low_cnt * config.L
     max_possible = max(len(text) , 1)
-    norm_score = np.clip(raw_score / max_possible *10 , 0, 10)
+    norm_score = np.clip(raw_score / max_possible *10, 0, 10)
     return round(norm_score, 2)
 
 #分割列表
@@ -128,16 +130,16 @@ def chunkify(lst, n):
     return [lst[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n)]
 
 #执行
-def main():
-
-    with Pool(processes=config.CPU) as pool:
+def main(name=None):
+    if name:
+        shutil.copy2(config.CK_CONFIG_PATH,config.CONFIG_PATH )
+    with Pool(processes=config.CPU,) as pool:
         results = pool.map(count_with_labels,chunkify(segment_with_labels(*filter_strategy()),config.CPU))
     flat_results = []
     for batch in results:flat_results.extend(batch)
     #转图
     result_df = pd.DataFrame(flat_results)
-
-    #按策略分组汇总
+    # 按策略分组汇总
     summary = result_df.groupby("名称").mean().round(config.round_data)
     print(summary)
     # 导出excel

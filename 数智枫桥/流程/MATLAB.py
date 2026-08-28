@@ -10,9 +10,6 @@ import decorators
 import random
 
 
-perceptual_noise=True
-initial_noise=True
-noise=False
 data=[]
 T=[]
 X_1,X_2,X_3=[],[],[]
@@ -46,17 +43,12 @@ def init_parameter():
 
 def truncated_normal_noise(i,_seed):
     noise_list = []
-    mu = 0
-    sigma = 1
-    bound_low = -0.50
-    bound_high = 0.50
-
     #np.random.seed(seed)
     for _ in range(i):
         # 生成正态样本，超出边界则重新采样
         while True:
-            eps = np.random.normal(loc=mu, scale=sigma)
-            if bound_low <= eps <= bound_high:
+            eps = np.random.normal(loc=config.mu, scale=config.sigma)
+            if config.bound_low <= eps <= config.bound_high:
                 break
         noise_list.append(eps)
     return noise_list
@@ -81,7 +73,7 @@ def replicator_ode(t, z, c1, r1, l1, c2, r2, l2,c3, _r3, l3)->list:
     v_neg = _x1 * l1/config.loss_coefficient + _x2* l2/config.loss_coefficient + _x3 * l3/config.loss_coefficient                            # 消极维权收益
 
 
-    if  perceptual_noise==False or noise==False:
+    if  config.perceptual_noise==False or config.noise==False:
         v_avg = _y1 * v_pos +  _y2 * v_neg # 退役军人平均收益
         u_avg = _x1 * u_rigid+ _x2 * u_offline + _x3 * u_digital   # 基层平均收益（政府群体）
 
@@ -108,7 +100,7 @@ def replicator_ode(t, z, c1, r1, l1, c2, r2, l2,c3, _r3, l3)->list:
 #计算主逻辑
 @decorators.validate_and_catch(func_name="演化博弈模块的计算主逻辑")
 def calculator(c1, r1, l1, j1,c2, r2, l2, j2, c3, r3, l3,j3):
-    if  initial_noise==True and noise==True:
+    if  config.initial_noise==True and config.noise==True:
         now= random.uniform(1, 100)
         seed = int(now * 1000) % 2 ** 32
         #这个用是否固定随机的噪音
@@ -199,7 +191,7 @@ def _plot_sync(t, x1_t,x2_t,x3_t):
         plt.title('三策略演化博弈轨迹')#标题
         plt.grid(True)#显示网格线
         plt.tight_layout()#自动调整间距，就是美化，有点神奇
-        plt.savefig('game_evolution.png', dpi=300,bbox_inches="tight")#路径和保存的图片分辨率
+        plt.savefig('结果/game_evolution.png', dpi=300,bbox_inches="tight")#路径和保存的图片分辨率
          # 非阻塞显
         Tool.write_sys_opt_log("演化博弈图绘制完成")
         plt.show()
@@ -218,7 +210,7 @@ def _plot_sync2(t,  y1_t,y2_t):
         plt.title('退役军人演化博弈轨迹')#标题
         plt.grid(True)#显示网格线
         plt.tight_layout()#自动调整间距，就是美化，有点神奇
-        plt.savefig('game_evolution2.png', dpi=300)#路径和保存的图片分辨率
+        plt.savefig('结果/game_evolution2.png', dpi=300)#路径和保存的图片分辨率
          # 非阻塞显
         Tool.write_sys_opt_log("退役军人演化博弈图绘制完成")
         plt.show()
@@ -247,7 +239,7 @@ def _plot_sync3(t,_all_data):
         plt.title('三策略演化博弈带噪音轨迹')  # 标题
         plt.grid(True)  # 显示网格线
         plt.tight_layout()  # 自动调整间距，就是美化，有点神奇
-        plt.savefig('game_evolution3.png', dpi=300, bbox_inches="tight")  # 路径和保存的图片分辨率
+        plt.savefig('结果/game_evolution3.png', dpi=300, bbox_inches="tight")  # 路径和保存的图片分辨率
         # 非阻塞显
         Tool.write_sys_opt_log("演化博弈图绘制完成")
         plt.show()
@@ -286,7 +278,7 @@ async def plt_numer_yi_bu(t, x1_t,x2_t,x3_t ,y1_t,y2_t,e_t,all_data):
 
 # 执行
 def main():
-    if not noise:asyncio.run(plt_numer_yi_bu(*calculator(*init_parameter()),data));return
+    if not config.noise:asyncio.run(plt_numer_yi_bu(*calculator(*init_parameter()),data));return
     for _ in range(config.counts):data.append(calculator(*init_parameter()))
     if data:mc_traj(data);asyncio.run(plt_numer_yi_bu(*mean_data(),data))
     else:raise Exception("数据异常")
