@@ -32,21 +32,21 @@ def build_sidebar_panel():
     st.subheader("演化博弈")
     with st.expander("点击展开", expanded=False):
         with st.expander("演化博弈初始值", expanded=False):
-                DATA["微分方程组初始值"]["政府初始选择刚性管控策略的概率"]=st.slider("刚性管控政策初始概率",0,1,config.DEFAULT_CONFIG["微分方程组初始值"]["政府初始选择刚性管控策略的概率"])
-                DATA["微分方程组初始值"]["政府初始选择纯线下服务策略的概率"] = st.slider("纯线下服务策略", 0, 1,config.DEFAULT_CONFIG["微分方程组初始值"]["政府初始选择纯线下服务策略的概率"])
-                DATA ["微分方程组初始值"]["政府初始选择数智融合概率"]= st.slider("数智刚柔融合概率", 0, 1,config.DEFAULT_CONFIG["微分方程组初始值"]["政府初始选择数智融合概率"] )
+                DATA["微分方程组初始值"]["政府初始选择刚性管控策略的概率"]=st.slider("刚性管控政策初始概率",0.0,1.0,config.DEFAULT_CONFIG["微分方程组初始值"]["政府初始选择刚性管控策略的概率"])
+                DATA["微分方程组初始值"]["政府初始选择纯线下服务策略的概率"] = st.slider("纯线下服务策略", 0.0, 1.0,config.DEFAULT_CONFIG["微分方程组初始值"]["政府初始选择纯线下服务策略的概率"])
+                DATA ["微分方程组初始值"]["政府初始选择数智融合概率"]= st.slider("数智刚柔融合概率", 0.0, 1.0,config.DEFAULT_CONFIG["微分方程组初始值"]["政府初始选择数智融合概率"] )
                 total = DATA["微分方程组初始值"]["政府初始选择刚性管控策略的概率"] + DATA["微分方程组初始值"]["政府初始选择纯线下服务策略的概率"] + DATA["微分方程组初始值"]["政府初始选择数智融合概率"]
                 if abs(total - 1.0) > 0.001:st.warning(f"概率之和为 {total:.2f}，必须等于 1")
                 else:st.success("概率校验通过")
                 st.write("")
-        with st.subheader("", expanded=False):
-            DATA["演化博弈系数"]["损耗系数"]=st.slider("损耗系数",0,20,config.DEFAULT_CONFIG["演化博弈系数"]["损耗系数"])
+        with st.expander("公式系数", expanded=False):
+            DATA["演化博弈系数"]["损耗系数"]=st.slider("损耗系数",0,20,10)
         st.write("")
         with st.expander("公式参数", expanded=False):
-            DATA["演化博弈公式参数"]["刚性收益比例"]=st.slider("刚性收益比例",0,1.5,config.DEFAULT_CONFIG["演化博弈公式参数"]["刚性收益比例"])
-            DATA["演化博弈公式参数"]["线下收益比例"]=st.slider("线下收益比例",0,1.5,config.DEFAULT_CONFIG["演化博弈公式参数"]["线下收益比例"])
-            DATA["演化博弈公式参数"]["刚柔融合额外收益"]=st.slider("刚柔融合额外收益系数",0,1.5,config.DEFAULT_CONFIG["演化博弈公式参数"]["刚柔融合额外收益"])
-            DATA["演化博弈公式参数"]["单位比例收益值"]=st.slider("单位比例收益值",0,1.5,config.DEFAULT_CONFIG["演化博弈公式参数"]["单位比例收益值"])
+            DATA["演化博弈公式参数"]["刚性收益比例"]=st.slider("刚性收益比例",0.0,1.5,config.DEFAULT_CONFIG["演化博弈公式参数"]["刚性收益比例"],step=0.01)
+            DATA["演化博弈公式参数"]["线下收益比例"]=st.slider("线下收益比例",0.0,1.5,config.DEFAULT_CONFIG["演化博弈公式参数"]["线下收益比例"],step=0.01)
+            DATA["演化博弈公式参数"]["刚柔融合额外收益"]=st.slider("刚柔融合额外收益系数",0.0,1.5,float(config.DEFAULT_CONFIG["演化博弈公式参数"]["刚柔融合额外收益"]),step=0.01)
+            DATA["演化博弈公式参数"]["单位比例收益值"]=st.slider("单位比例收益值",0.0,1.5,config.DEFAULT_CONFIG["演化博弈公式参数"]["单位比例收益值"],step=0.01)
             st.write("")
 
         config.noise = st.checkbox("噪声", value=False)

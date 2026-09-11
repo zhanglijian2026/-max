@@ -5,12 +5,12 @@ import warnings
 from log import Tool
 import shutil
 import decorators
-import streamlit as st
 
 # 检索配置文件
 CK_CONFIG_PATH=os.path.join(os.path.dirname(__file__), "ck_config.json")
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
 CUN_DANG = os.path.join(os.path.dirname(__file__), "存档.json")
+COST_PATH = os.path.join(os.path.dirname(__file__), "领域词典.json")
 
 @decorators.validate_and_catch("加载配置")
 def config_main():
@@ -22,11 +22,7 @@ def config_main():
     plt.rcParams['axes.unicode_minus'] = False   # 解决负号显示问题
 
 #配置文件备份
-DEFAULT_CONFIGS={
-    "保留的策略名称（三级编码）":[
-        "纯刚性管控",
-        "纯线下柔性服务",
-        "数智刚柔融合"],
+COST_DATA={
     "成本类词汇(数值越高=成本越大)": {
         "cost_high": [
             "人力消耗大", "人力", "运维", "基层", "初期", "超支", "昂贵", "开发", "治理", "硬件",
@@ -76,7 +72,6 @@ DEFAULT_CONFIGS={
             "未增", "略短", "简化", "小升", "略减", "略提", "小扩", "慢升", "渐增",
             "稳固", "增加", "保持", "渐建", "渐成", "恢复", "保底", "提升", "到位",
             "增强", "落实", "建立", "回升", "稳定", "平复", "软化", "提高"
-
         ]
     },
     "损耗风险词汇（数值越高=次生损耗越大）": {
@@ -108,13 +103,23 @@ DEFAULT_CONFIGS={
             "准确", "正常", "全程留痕、及时响应", "深入"
         ],
     },
-    "导入的excel名称(在同一文件夹中)":"nvivo_coding_output2(1).xlsx",
-    "导出的excel名字":"dd.xlsx",
-    "校准模式(tok/fine(细校准)或tok/coarse(粗校准)":"tok/fine",
-    "成本类权重":3,
-    "收益类权重":2,
-    "损耗类权重":1,
-    "精细度(必须大于0)":3,
+}
+
+DEFAULT_CONFIGS={
+    "保留的策略名称（三级编码）":[
+        "纯刚性管控",
+        "纯线下柔性服务",
+        "数智刚柔融合"],
+    "锚点":{
+        "成本":"需要投入大量人力物力财力，行政成本非常高",
+        "收益":"能够快速闭环解决诉求，大幅提升服务效能",
+        "损耗":"容易引发重复信访越级上访，造成严重次生矛盾"
+    },
+
+    "高权重":3,
+    "中权重":2,
+    "低权重":1,
+    "精细度(必须大于0)":3.0,
     "微分方程组初始值":{
         "政府初始选择刚性管控策略的概率":0.2,
         "政府初始选择纯线下服务策略的概率":0.3,
@@ -124,20 +129,46 @@ DEFAULT_CONFIGS={
         "初始":0,
         "结束":100
     },
-    "双主体演化博弈策略演化轨迹图":"game_evolution.png",
-    "提取博弈输出时序变量CSV":"game_output_timeseries.csv",
-    "存量":100,
+    "演化博弈系数":{
+        "损耗系数":10
+    },
+    "演化博弈公式参数":{
+        "刚性收益比例":0.4,
+        "线下收益比例":0.6,
+        "刚柔融合额外收益":0.0,
+        "单位比例收益值":0.1,
+    },
+    "噪音程度设置": {
+        "中心值": 0.0,
+        "方差": 1.0,
+        "取的最大负面值": 0.5,
+        "取的正面最大值": 0.5
+    },
+    "噪音博弈次数":100,
+    "模型值设置":{
+        "开始值":0,
+        "时间值":100,
+        "曲线点数":1000
+    },
+    "存量":1000,
     "sd_仿真月数":24,
-    "CPU":8
+    "CPU":8,
+    "拥挤效应阈值":0.5,
+    "导入的excel名称(在同一文件夹中)":"素材\hanlp_input_copy.xlsx",
+    "导出的excel名字":"dd.xlsx",
+    "双主体演化博弈策略演化轨迹图": "game_evolution.png",
+    "提取博弈输出时序变量CSV": "game_output_timeseries.csv",
+
 }
 
-results=[]
+results = []
 
-#读取配置
+# 读取配置
 class ConfigData:
     _instance = None
     _initialized=False
     config={}
+    cost={}
     def __new__(cls):
         if  cls._instance is None:
             cls._instance = super(ConfigData, cls).__new__(cls)
@@ -146,10 +177,10 @@ class ConfigData:
         if ConfigData._initialized :
             return
         ConfigData.config=self.load_config(CONFIG_PATH)
+        ConfigData.cost=self.load_config(COST_PATH)
         ConfigData._initialized=True
 
     @staticmethod
-    @st.cache_resource
     def load_config(data) -> dict:
         if not os.path.exists(data):
             with open(data, "w", encoding="utf-8") as f:
@@ -158,15 +189,13 @@ class ConfigData:
         try:
             with open(data, "r", encoding="utf-8") as f:
                 user_config = json.load(f)
-            print("加载")
             return ConfigData.merge(user_config, DEFAULT_CONFIGS)
         except (json.JSONDecodeError, FileNotFoundError, OSError):
             print("配置文件损坏或读取失败，已重新加载上一次配置")
             with open(data, "w", encoding="utf-8") as f:
                 json.dump(DEFAULT_CONFIGS, f, ensure_ascii=False, indent=4)
             return DEFAULT_CONFIGS.copy()
-
-#递归和并
+    #递归和并
     @staticmethod
     def merge(default: dict, user: dict) -> dict:
         """递归合并配置"""
@@ -178,7 +207,6 @@ class ConfigData:
                 user[k] = v
         Tool.write_sys_opt_log("加载配置成功")
         return user
-
 #存档
 def main():
     while True:
@@ -192,7 +220,6 @@ def main():
             if opt == 1:
                 # 存档
                 if os.path.exists(CONFIG_PATH):
-
                     # 备份
                     shutil.copy2(CONFIG_PATH, CUN_DANG)
                     print(f" 最新备份已更新")
@@ -244,28 +271,33 @@ def main():
             print(" 请输入正确的数值")
             Tool.write_err_log("你在运行config文件时输入了非数值")
 
-if __name__ =="__main__":
-    main()
 #配置
 
 config_main()
 obj_config=ConfigData()
 DEFAULT_CONFIG=obj_config.config
+COST_DATAS=obj_config.cost
 
 #成本类词汇
-cost_high =set(DEFAULT_CONFIG["成本类词汇(数值越高=成本越大)"]["cost_high"])
-cost_mid = set(DEFAULT_CONFIG["成本类词汇(数值越高=成本越大)"]["cost_mid"])
-cost_low =set(DEFAULT_CONFIG["成本类词汇(数值越高=成本越大)"]["cost_low"])
+cost_high =set(COST_DATA["成本类词汇(数值越高=成本越大)"]["cost_high"])
+cost_mid = set(COST_DATA["成本类词汇(数值越高=成本越大)"]["cost_mid"])
+cost_low =set(COST_DATA["成本类词汇(数值越高=成本越大)"]["cost_low"])
 
 # 收益类词汇（数值越高=收益越高）
-gain_high =set(DEFAULT_CONFIG["收益类词汇（数值越高=收益越高）"]["gain_high"])
-gain_mid =set(DEFAULT_CONFIG["收益类词汇（数值越高=收益越高）"]["gain_mid"])
-gain_low = set(DEFAULT_CONFIG["收益类词汇（数值越高=收益越高）"]["gain_low"])
+gain_high =set(COST_DATA["收益类词汇（数值越高=收益越高）"]["gain_high"])
+gain_mid =set(COST_DATA["收益类词汇（数值越高=收益越高）"]["gain_mid"])
+gain_low = set(COST_DATA["收益类词汇（数值越高=收益越高）"]["gain_low"])
 
 # 损耗风险词汇（数值越高=次生损耗越大）
-loss_high = set(DEFAULT_CONFIG["损耗风险词汇（数值越高=次生损耗越大）"]["loss_high"])
-loss_mid = set(DEFAULT_CONFIG["损耗风险词汇（数值越高=次生损耗越大）"]["loss_mid"])
-loss_low = set(DEFAULT_CONFIG["损耗风险词汇（数值越高=次生损耗越大）"]["loss_low"])
+loss_high = set(COST_DATA["损耗风险词汇（数值越高=次生损耗越大）"]["loss_high"])
+loss_mid = set(COST_DATA["损耗风险词汇（数值越高=次生损耗越大）"]["loss_mid"])
+loss_low = set(COST_DATA["损耗风险词汇（数值越高=次生损耗越大）"]["loss_low"])
+
+#锚点
+anchor_C=DEFAULT_CONFIG["锚点"]["成本"]
+anchor_R=DEFAULT_CONFIG["锚点"]["收益"]
+anchor_L=DEFAULT_CONFIG["锚点"]["损耗"]
+
 
 #名称
 date=DEFAULT_CONFIG["保留的策略名称（三级编码）"]
@@ -276,9 +308,6 @@ ff=DEFAULT_CONFIG["导出的excel名字"]
 tu_p=DEFAULT_CONFIG["双主体演化博弈策略演化轨迹图"]
 sd_csv=DEFAULT_CONFIG["提取博弈输出时序变量CSV"]
 
-#在hanlp中的词性分析和模型
-key=DEFAULT_CONFIG["校准模式(tok/fine(细校准)或tok/coarse(粗校准)"]
-
 #权重
 C=DEFAULT_CONFIG["高权重"]
 R=DEFAULT_CONFIG["中权重"]
@@ -287,16 +316,11 @@ L=DEFAULT_CONFIG["低权重"]
 #hanlp算出来的小数点位数
 round_data=DEFAULT_CONFIG["精细度(必须大于0)"]
 
-"""仿真基础设置"""
-
 #博弈迭代周期100期
 ts_pan = [DEFAULT_CONFIG["博弈迭代周期"]["初始"], DEFAULT_CONFIG["博弈迭代周期"]["结束"]]
 
 #微分方程组初始值
 init_cond = [DEFAULT_CONFIG["微分方程组初始值"]["政府初始选择刚性管控策略的概率"], DEFAULT_CONFIG["微分方程组初始值"]["政府初始选择纯线下服务策略的概率"],DEFAULT_CONFIG["微分方程组初始值"]["政府初始选择数智融合概率"]]
-
-
-""""""
 
 #未化解信访矛盾存量
 init_stock=DEFAULT_CONFIG["存量"]
@@ -310,7 +334,10 @@ CPU=DEFAULT_CONFIG["CPU"]
 #演化博弈系数
 loss_coefficient=DEFAULT_CONFIG["演化博弈系数"]["损耗系数"]
 
+#粗分还是细分
 text=True
+
+#剔除标点符号
 text_hanlp=True
 
 #演化博弈公式参数
@@ -318,7 +345,6 @@ alpha=DEFAULT_CONFIG["演化博弈公式参数"]["刚性收益比例"]
 beta=DEFAULT_CONFIG["演化博弈公式参数"]["线下收益比例"]
 gamma=DEFAULT_CONFIG["演化博弈公式参数"]["刚柔融合额外收益"]
 delta_R=DEFAULT_CONFIG["演化博弈公式参数"]["单位比例收益值"]
-
 
 #相对噪音的随机值
 mu = DEFAULT_CONFIG["噪音程度设置"]["中心值"]
@@ -329,16 +355,25 @@ bound_high =  DEFAULT_CONFIG["噪音程度设置"]["取的正面最大值"]
 #博弈次数
 counts=DEFAULT_CONFIG["噪音博弈次数"]
 
-
-
-
-
-#噪音
+#噪音开关
 perceptual_noise=True
 initial_noise=True
 noise=False
 
+#模型值设置
+start=DEFAULT_CONFIG["模型值设置"]["开始值"]
+stop=DEFAULT_CONFIG["模型值设置"]["时间值"]
+num=DEFAULT_CONFIG["模型值设置"]["曲线点数"]
 
+#数智融合的久公式
+R3_=True
+
+#拥挤效应的阈值
+ovr=DEFAULT_CONFIG["拥挤效应阈值"]
+
+
+if __name__ =="__main__":
+    main()
 
 
 

@@ -89,7 +89,7 @@ def count_with_labels(batch):
 
         # 计算初始群众行为概率（负面词越多，消极维权概率越高）
         neg_word_count = sum([1 for w in word["词列表"] if w in (config.loss_high | config.loss_low | config.loss_mid)])
-        prob_neg = np.clip(neg_word_count / max(len(word["词列表"]), 1), 0, 1)
+        prob_neg = np.clip(neg_word_count/ max(len(word["词列表"])/100, 1), 0, 1)
         prob_pos = 1 - prob_neg
             # 存入列表
         batch_results.append({
