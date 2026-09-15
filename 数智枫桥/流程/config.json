@@ -40,9 +40,9 @@
     },
     "存量": 1000,
     "sd_仿真月数": 24,
-    "CPU": 8,
+    "CPU": 4,
     "导入的excel名称(在同一文件夹中)": "素材\\hanlp_input_copy.xlsx",
-    "导出的excel名字": "dd.xlsx",
+    "导出的excel名字": "ee.xlsx",
     "双主体演化博弈策略演化轨迹图": "game_evolution.png",
     "提取博弈输出时序变量CSV": "game_output_timeseries.csv"
 }

@@ -15,7 +15,7 @@ X_1,X_2,X_3=[],[],[]
 Y_1,Y_2,E_t=[],[],[]
 
 #读取数据
-@decorators.validate_and_catch(func_name="读取haNLP数据")
+@decorators.validate_and_catch()
 def init_parameter():
     # 导入 HanLP 量化参数（从 haNLP_game_params.xlsx 读取）
     param_table = pd.read_excel(config.ff)
@@ -145,9 +145,9 @@ def calculator(c1, r1, l1, j1,c2, r2, l2, j2, c3, r3, l3,j3):
 
     if config.R3_:u_digital=r3-c3-l3/config.loss_coefficient
     else :u_digital = (config.alpha*r1+config.beta*r2) - c3 - l3/config.loss_coefficient +config.gamma*config.delta_R
-    e_t = (x1_t * np.abs((pnp_r1 - pnp_c1 - pnp_l1 / config.loss_coefficient) - x1_t * ( pnp_r1 - pnp_c1 - pnp_l1 / config.loss_coefficient) + x2_t * ( pnp_r2 - pnp_c2 - pnp_l2 / config.loss_coefficient) + x3_t * u_digital) +
-           x2_t * np.abs((pnp_r2 - pnp_c2 - pnp_l2 / config.loss_coefficient) - x1_t * (pnp_r1 - pnp_c1 - pnp_l1 / config.loss_coefficient) + x2_t * ( pnp_r2 - pnp_c2 - pnp_l2 / config.loss_coefficient) + x3_t * u_digital) +
-           x3_t * np.abs(u_digital- x1_t * ( pnp_r1 - pnp_c1 - pnp_l1 / config.loss_coefficient) + x2_t * ( pnp_r2 - pnp_c2 - pnp_l2 / config.loss_coefficient) + x3_t * u_digital))
+    e_t = (x1_t * np.abs((pnp_r1 - pnp_c1 - pnp_l1 / config.loss_coefficient) - (x1_t * ( pnp_r1 - pnp_c1 - pnp_l1 / config.loss_coefficient) + x2_t * ( pnp_r2 - pnp_c2 - pnp_l2 / config.loss_coefficient) + x3_t * u_digital)) +
+           x2_t * np.abs((pnp_r2 - pnp_c2 - pnp_l2 / config.loss_coefficient) - (x1_t * (pnp_r1 - pnp_c1 - pnp_l1 / config.loss_coefficient) + x2_t * ( pnp_r2 - pnp_c2 - pnp_l2 / config.loss_coefficient) + x3_t * u_digital) )+
+           x3_t * np.abs(u_digital- (x1_t * ( pnp_r1 - pnp_c1 - pnp_l1 / config.loss_coefficient) + x2_t * ( pnp_r2 - pnp_c2 - pnp_l2 / config.loss_coefficient) + x3_t * u_digital)))
 
     return t, x1_t,x2_t,x3_t, y1_t,y2_t,e_t
 
