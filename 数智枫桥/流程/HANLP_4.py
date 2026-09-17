@@ -1,3 +1,4 @@
+
 import pandas as pd
 import numpy as np
 import re
@@ -10,6 +11,11 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 _model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
 
+#_model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+#_model=SentenceTransformer("moka-ai/m3e-base")
+#_model=SentenceTransformer("BAAI/bge-m3")
+#_model=SentenceTransformer("BAAI/bge-large-zh-v1.5")
+#_model=SentenceTransformer("shibing624/text2vec-base-chinese")
 _ANCHOR_COST_HIGH_VEC = _model.encode(config.ANCHOR_COST_HIGH)
 _ANCHOR_COST_LOW_VEC  = _model.encode(config.ANCHOR_COST_LOW)
 _ANCHOR_GAIN_HIGH_VEC = _model.encode(config.ANCHOR_GAIN_HIGH)
@@ -153,14 +159,15 @@ def main(name=None):
         })
 
     result_df = pd.DataFrame(results)
+    print("\n")
     print(result_df)
-    result_df.to_excel("./h3.xlsx", index=False)
+    result_df.to_excel("./数据/h3.xlsx", index=False)
 
     # 汇总时自动跳过 NaN
     summary = result_df.groupby("名称").mean().round(config.round_data)
     print("\n量化结果汇总：")
     print(summary)
-    summary.to_excel(config.ff, index=True)
+    summary.to_excel("./数据/h3_mean.xlsx", index=True)
     Tool.write_sys_opt_log("成功导出 Excel")
 
 if __name__ == "__main__":

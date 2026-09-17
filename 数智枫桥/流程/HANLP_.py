@@ -139,12 +139,12 @@ def main(name=None):
     for batch in results:flat_results.extend(batch)
     #转图
     result_df = pd.DataFrame(flat_results)
-    result_df.to_excel("./hg.xlsx", index=True)
+    result_df.to_excel("./数据/hg.xlsx", index=True)
     # 按策略分组汇总
     summary = result_df.groupby("名称").mean().round(config.round_data)
     print(summary)
     # 导出excel
-    summary.to_excel(config.ff, index=True)
+    summary.to_excel("./数据/hg_mean.xlsx", index=True)
     Tool.write_sys_opt_log("成功导入excel")
 
 if __name__ == "__main__":

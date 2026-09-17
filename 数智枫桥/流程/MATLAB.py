@@ -118,11 +118,11 @@ def calculator(c1, r1, l1, j1,c2, r2, l2, j2, c3, r3, l3,j3):
         config.ts_pan,                                          # 时间范围 [0, 100]
         [pnp_x1,pnp_x2,pnp_x3,(pnp_x1 * j1 + pnp_x2 * j2 + pnp_x3 * j3), 1 - (pnp_x1 * j1 + pnp_x2 * j2 + pnp_x3 * j3)],                              # 初始值
         method='RK45',                                          # 等价于 MATLAB 的 ode45（默认就是 RK45），也是python里的scipy的一个算法
-        rtol=1e-6,                                              # 等价于 'RelTol',1e-6，相对误差容限（精度控制）
+        rtol=1e-4,
+        max_step=0.5,# 等价于 'RelTol',1e-6，相对误差容限（精度控制）
         t_eval=np.linspace(config.start, config.stop, config.num)        # 输出采样点
     )
-    if not sol.success:
-        raise RuntimeError(f"演化博弈ODE求解失败，信息：{sol.message}")
+    if not sol.success:raise RuntimeError(f"演化博弈ODE求解失败，信息：{sol.message}")
     #solve_ivp 返回一个 OdeResult 对象，包含4个属性
     #属性	        含义	                    用法
     #sol.t	       时间点数组	                t = sol.t
@@ -333,7 +333,12 @@ async def plt_numer_yi_bu(t, x1_t,x2_t,x3_t ,y1_t,y2_t,e_t,all_data):
 
 # 执行
 def main():
-    if not config.noise:asyncio.run(plt_numer_yi_bu(*calculator(*init_parameter()),data));return
+    if not config.noise:
+        A=init_parameter()
+        print(A)
+        B=calculator(*A)
+        print(B)
+        asyncio.run(plt_numer_yi_bu(*B,data));return
     for _ in range(config.counts):data.append(calculator(*init_parameter()))
     if data:mc_traj(data);asyncio.run(plt_numer_yi_bu(*mean_data(),data))
     else:raise Exception("数据异常")

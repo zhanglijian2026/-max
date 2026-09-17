@@ -411,7 +411,7 @@ CPU=DEFAULT_CONFIG["CPU"]
 loss_coefficient=DEFAULT_CONFIG["演化博弈系数"]["损耗系数"]
 
 #粗分还是细分
-text=True
+text=False
 
 #剔除标点符号
 text_hanlp=True
@@ -432,9 +432,9 @@ bound_high =  DEFAULT_CONFIG["噪音程度设置"]["取的正面最大值"]
 counts=DEFAULT_CONFIG["噪音博弈次数"]
 
 #噪音开关
-perceptual_noise=True
-initial_noise=True
-noise=True
+perceptual_noise=False
+initial_noise=False
+noise=False
 
 #模型值设置
 start=DEFAULT_CONFIG["模型值设置"]["开始值"]
